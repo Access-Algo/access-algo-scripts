@@ -11,7 +11,7 @@
 // Designed for TradingView. Compatible with Pine Script v6.
 // Free to use under invite-only rules or for educational purposes.
 //
-// Version:         v5
+// Version:         v6
 // Last Updated:    2025-04-16
 // Author:          Hc_Sunt_Lucrum
 // Contact:         access-algo.com | TradingView: @Hc_Sunt_Lucrum
@@ -19,8 +19,8 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © hc_svnt_mordacitas
 
-//@version=5
-indicator("Short-Pullback", shorttitle="Short Pullback", overlay=true)
+//@version=6
+indicator('Short-Pullback', shorttitle = 'Short Pullback', overlay = true)
 
 //Moving Averages
 sma8 = ta.sma(close, 8)
@@ -40,31 +40,35 @@ var greenTrianglePlotted = false
 if crossAbove
     lookingForGreenTriangle := true
     greenTrianglePlotted := false
+    greenTrianglePlotted
 
 plotGreenTriangle = lookingForGreenTriangle and not greenTrianglePlotted and low < ema5Low and sma8 > sma20
 if plotGreenTriangle
     greenTrianglePlotted := true
     lookingForGreenTriangle := false
+    lookingForGreenTriangle
 
 var lookingForRedTriangle = false
 var redTrianglePlotted = false
 if crossBelow
     lookingForRedTriangle := true
     redTrianglePlotted := false
+    redTrianglePlotted
 
 plotRedTriangle = lookingForRedTriangle and not redTrianglePlotted and high > ema5High and sma8 < sma20
 if plotRedTriangle
     redTrianglePlotted := true
     lookingForRedTriangle := false
+    lookingForRedTriangle
 
 // Plot to chart
-plot(sma8, color=color.gray, title="8 SMA", linewidth=1)
-plot(sma20, color=color.blue, title="20 SMA", linewidth=1)
-plot(ema5Low, color=color.red, title="5 EMA Low", linewidth=1)
-plot(ema5High, color=color.red, title="5 EMA High", linewidth=1)
+plot(sma8, color = color.gray, title = '8 SMA', linewidth = 1)
+plot(sma20, color = color.blue, title = '20 SMA', linewidth = 1)
+plot(ema5Low, color = color.red, title = '5 EMA Low', linewidth = 1)
+plot(ema5High, color = color.red, title = '5 EMA High', linewidth = 1)
 
 // Plotting Shapes
-plotshape(series=plotGreenTriangle, location=location.belowbar, color=color.green, style=shape.triangleup, size=size.normal, title="Green Triangle")
-plotshape(series=crossAbove, location=location.belowbar, color=color.green, style=shape.xcross, size=size.normal, title="Green Cross")
-plotshape(series=plotRedTriangle, location=location.abovebar, color=color.red, style=shape.triangledown, size=size.normal, title="Red Triangle")
-plotshape(series=crossBelow, location=location.abovebar, color=color.red, style=shape.xcross, size=size.normal, title="Red Cross")
+plotshape(series = plotGreenTriangle, location = location.belowbar, color = color.green, style = shape.triangleup, size = size.normal, title = 'Green Triangle')
+plotshape(series = crossAbove, location = location.belowbar, color = color.green, style = shape.xcross, size = size.normal, title = 'Green Cross')
+plotshape(series = plotRedTriangle, location = location.abovebar, color = color.red, style = shape.triangledown, size = size.normal, title = 'Red Triangle')
+plotshape(series = crossBelow, location = location.abovebar, color = color.red, style = shape.xcross, size = size.normal, title = 'Red Cross')
