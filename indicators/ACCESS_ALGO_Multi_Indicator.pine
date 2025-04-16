@@ -1,7 +1,22 @@
-// ACCESS ALGO - Free Multi-Indicator Suite 
-// Switch between RSI and MACD
-// Add up to 8 user-defined Moving Averages
-// Visit access-algo.com for access (free invite-only script)
+// ─────────────────────────────────────────────────────────────
+// ACCESS ALGO – Multi Indicator Suite (RSI/MACD + MAs)
+// © Hc_Sunt_Lucrum | access-algo.com
+// This script is subject to the terms of the Mozilla Public License 2.0
+// https://mozilla.org/MPL/2.0/
+//
+// Description:
+// Toggle between RSI and MACD display, with up to 8 customizable MAs.
+// Designed to help identify trend + momentum confluence in a single overlay.
+//
+// Usage:
+// TradingView-compatible | Free Invite-Only Script via access-algo.com
+//
+// Version:         v1.0
+// Last Updated:    2025-04-16
+// Author:          Hc_Sunt_Lucrum
+// Contact:         access-algo.com | TradingView: @Hc_Sunt_Lucrum
+// ─────────────────────────────────────────────────────────────
+
 // This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © Hc_Sunt_Lucrum - Access Algo 
 
