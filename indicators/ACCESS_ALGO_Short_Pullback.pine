@@ -20,7 +20,7 @@
 // © hc_svnt_mordacitas
 
 //@version=6
-indicator('Short-Pullback', shorttitle = 'Short Pullback', overlay = true)
+indicator('Short-Pullback', shorttitle = 'Short PB', overlay = true)
 
 //Moving Averages
 sma8 = ta.sma(close, 8)
