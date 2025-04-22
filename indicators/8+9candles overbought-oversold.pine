@@ -1,17 +1,17 @@
 // ─────────────────────────────────────────────────────────────
-// ACCESS ALGO – 9+9
+// ACCESS ALGO – 8+9
 // © Hc_Sunt_Lucrum | access-algo.com
 // This script is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
 //
 // Description:
-// 
+// Overbought and oversold 8+9 candle detection. Shows signs of reversals. 
 //
 // Usage:anyone
 // Designed for TradingView. Compatible with Pine Script v6.
 // Free to use under invite-only rules or for educational purposes.
 //
-// Version:         v6
+// Version:         v1
 // Last Updated:    2025-04-17
 // Author:          Hc_Sunt_Lucrum
 // Contact:         access-algo.com | TradingView: @Hc_Sunt_Lucrum
