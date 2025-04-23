@@ -11,7 +11,7 @@
 // Designed for TradingView. Compatible with Pine Script v6.
 // Free to use under invite-only rules or for educational purposes.
 //
-// Version:         v6
+// Version:         v2
 // Last Updated:    2025-04-16
 // Author:          Hc_Sunt_Lucrum
 // Contact:         access-algo.com | TradingView: @Hc_Sunt_Lucrum
@@ -22,13 +22,19 @@
 //@version=6
 indicator('Short-Pullback', shorttitle = 'Short PB', overlay = true)
 
-//Moving Averages
-sma8 = ta.sma(close, 8)
-sma20 = ta.sma(close, 20)
+// Moving Average Inputs
+sma_fast_len = input.int(8, minval=1, title="Fast SMA Length")
+sma_slow_len = input.int(20, minval=1, title="Slow SMA Length")
 
-//Bands
-ema5Low = ta.ema(low, 6)
-ema5High = ta.ema(high, 6)
+// Band EMA Inputs
+ema_band_len = input.int(6, minval=1, title="EMA Band Length")
+
+// Calculations using Inputs
+sma8 = ta.sma(close, sma_fast_len)
+sma20 = ta.sma(close, sma_slow_len)
+
+ema5Low = ta.ema(low, ema_band_len)
+ema5High = ta.ema(high, ema_band_len)
 
 //Crosses
 crossAbove = ta.crossover(sma8, sma20)
