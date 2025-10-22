@@ -1,0 +1,108 @@
+// ─────────────────────────────────────────────────────────────
+// ACCESS ALGO – Consecutive Candle Run + Reversal Detection   
+// © Hc_Sunt_Lucrum | access-algo.com
+// This script is subject to the terms of the Mozilla Public License 2.0
+// https://mozilla.org/MPL/2.0/
+//
+// Description: Detects runs in one direction on the chosen timeframe
+// 
+//
+// Usage: Public
+// Designed for TradingView. Compatible with Pine Script v6.
+// Free to use under invite-only rules or for educational purposes.
+//
+// Version:         v1
+// Last Updated:    2025-10-20
+// Author:          Hc_Sunt_Lucrum
+// Contact:         access-algo.com | TradingView: @Hc_Sunt_Lucrum
+// ─────────────────────────────────────────────────────────────
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Hc_Sunt_Lucrum
+
+//@version=6
+indicator("Run + Reversal Detector (module)", overlay=true, max_labels_count=500)
+
+// --- Zen library (project standard: v9) ---
+import ZenAndTheArtOfTrading/ZenLibrary/10 as zen
+
+// ===================== Inputs ===================== //
+var const string GRP = "Run + Reversal"
+runLen      = input.int(4,  "Run length (bars)",      minval=2, group=GRP)
+colorRuns   = input.bool(true, "Recolor candles during run",   group=GRP)
+runBullCol  = input.color(color.new(color.lime, 0), "Run color (bull)", group=GRP)
+runBearCol  = input.color(color.new(color.red,  0), "Run color (bear)", group=GRP)
+dojiBreaks  = input.bool(true, "Doji breaks the run", tooltip="If true, a neutral candle ends the run.", group=GRP)
+
+// Pin/Engulfing parameters (wired to ZenLibrary)
+hammerFib   = input.float(0.382, "Hammer fib (pin bar)",               minval=0, maxval=1, group=GRP)
+starFib     = input.float(0.382, "Shooting star fib (pin)",             minval=0, maxval=1, group=GRP)
+engulfWick  = input.bool(false,   "Engulf must include wick?",                         group=GRP)
+allowancePt = input.float(0.5,    "Engulf open allowance (pts)", tooltip="Tolerance for small gaps at open.", group=GRP)
+rejWickMax  = input.float(0.0,    "Max rejection wick/body (0=off)",                  group=GRP)
+// ===================== Helpers ===================== //
+getDir() => close > open ? 1 : close < open ? -1 : 0  // 1=bull, -1=bear, 0=doji
+
+// ===================== State (series) ===================== //
+var int  rr_streak = 0      // current run length
+var int  rr_dir    = 0      // current run direction (1/-1)
+var bool rr_armed  = false  // becomes true once rr_streak >= runLen
+
+// ===================== Run counting ===================== //
+curDir = getDir()
+// A potential break is either an opposite-colored bar OR a doji (if configured)
+potentialBreak = (rr_dir != 0 and curDir != 0 and curDir != rr_dir) or (curDir == 0 and dojiBreaks)
+
+// Precompute reversal patterns **on this bar**
+bullPin = zen.isHammer(hammerFib, false)            // bullish pin (hammer)
+bearPin = zen.isStar(starFib, false)                // bearish pin (shooting star)
+bullEng = zen.isBullishEC(allowancePt, rejWickMax, engulfWick)
+bearEng = zen.isBearishEC(allowancePt, rejWickMax, engulfWick)
+
+// Run ends **only** if potential break bar matches the opposite-direction reversal requirement
+bullEndOK = rr_dir == -1 and (bullPin or bullEng)   // after a RED run, need bullish reversal
+bearEndOK = rr_dir ==  1 and (bearPin or bearEng)   // after a GREEN run, need bearish reversal
+runEnded  = rr_armed and potentialBreak and (bullEndOK or bearEndOK)
+
+if barstate.isconfirmed
+    if rr_streak == 0
+        rr_dir    := curDir
+        rr_streak := curDir == 0 ? 0 : 1
+        rr_armed  := false
+    else
+        if curDir == rr_dir and curDir != 0
+            // run continues
+            rr_streak += 1
+        else if runEnded
+            // valid end with reversal pattern → reset streak, flip dir to this bar
+            rr_streak := (curDir == 0) ? 0 : 1
+            rr_dir    := curDir
+            rr_armed  := false
+        else if potentialBreak and not runEnded
+            // opposite/neutral bar but NOT a valid reversal → treat as fresh run start
+            rr_streak := (curDir == 0) ? 0 : 1
+            rr_dir    := curDir
+            rr_armed  := false
+        else if curDir != 0 and rr_dir == 0
+            rr_dir    := curDir
+            rr_streak := 1
+
+        // Arm once we reach threshold (and keep armed while streak continues)
+        if rr_streak >= runLen and curDir != 0
+            rr_armed := true
+
+// ===================== Coloring ===================== //
+// Build a series color, then call barcolor() at global scope
+color _runCol = na
+if colorRuns and rr_armed and curDir == rr_dir and curDir != 0
+    _runCol := rr_dir == 1 ? runBullCol : runBearCol
+barcolor(_runCol)
+
+// ===================== Signals (triangles on valid run ends) ===================== //
+shortSetup  = runEnded and rr_dir == -1   // red run ended by bullish reversal
+longSetup = runEnded and rr_dir ==  1   // green run ended by bearish reversal
+
+plotshape(longSetup,  title="Run End → Bullish Reversal", style=shape.triangleup,   location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny, text="▲")
+plotshape(shortSetup, title="Run End → Bearish Reversal", style=shape.triangledown, location=location.abovebar, color=color.new(color.red,  0), size=size.tiny, text="▼")
+
+// Debug (optional)
+// label.new(bar_index, high,  "streak="+str.tostring(rr_streak)+" dir="+str.tostring(rr_dir)+" armed="+str.tostring(rr_armed))
