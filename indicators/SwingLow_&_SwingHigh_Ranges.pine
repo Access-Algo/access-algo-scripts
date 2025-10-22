@@ -1,0 +1,292 @@
+// ─────────────────────────────────────────────────────────────
+// ACCESS ALGO – Swing Levels Indicator
+// © Hc_Sunt_Lucrum | access-algo.com
+// This script is subject to the terms of the Mozilla Public License 2.0
+// https://mozilla.org/MPL/2.0/
+//
+// Description: Lookback for Swing Levels. Then plots a range in order of ATR where other strategies may be able to use as a trigger.
+// 
+//
+// Usage: Public
+// Designed for TradingView. Compatible with Pine Script v6.
+// Free to use under invite-only rules or for educational purposes.
+//
+// Version:         v1
+// Last Updated:    2025-10-20
+// Author:          Hc_Sunt_Lucrum
+// Contact:         access-algo.com | TradingView: @Hc_Sunt_Lucrum
+// ─────────────────────────────────────────────────────────────
+
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Hc_Sunt_Lucrum
+
+//@version=6
+indicator('Swing Levels', overlay = true, max_lines_count = 500)
+
+// === INPUTS ===
+swingStrengthHigh = input.int(5, minval = 1, title = 'Swing high Lookback', tooltip = "How many candles to look back and determine and local Swing High upon which to trigger a doubble bottom search", display = display.all - display.status_line)
+swingStrengthLow = input.int(5, minval = 1, title = 'Swing low Lookback', tooltip = "How many candles to look back and determine and local Swing Low upon which to trigger a doubble bottom search", display = display.all - display.status_line)
+swingSourceHigh = input.source(high, title = 'Swing high source', display = display.all - display.status_line)
+swingSourceLow = input.source(low, title = 'Swing low source', display = display.all - display.status_line)
+removeSweptLevels = input.bool(false, title = 'Delete swept double bottoms', tooltip = 'When enabled, past swing lines will be deleted if price closes through them.')
+sweepConditionOpt = input.string("Close Break", title = "Sweep condition type", options = ["Wick Break", "Close Break"], tooltip = "Choose whether swing levels are deleted when price wicks through them (high/low) or closes through them (close).")
+
+
+doubeBottomATRLength = input.int(14, title = "Double Bottom ATR length")
+doubleBottomATRBand = input.float(1, title = "Double Bottom Zone ATR Multiplier", tooltip = "Creates a band around a local Swing High or Swing Low, upon which to detect the presence of a reversal candle and confirm and double bottom entry. Number multiplies the Double Bottom ATR")
+
+// === STYLE INPUTS ===
+// --- Current SH
+shExtColor = input.color(color.red, 'Color', group = 'Current Swing High', display = display.all - display.status_line)
+shExtStyleStr = input.string('Solid', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Current Swing High', display = display.all - display.status_line)
+shExtWidth = input.int(3, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing High', display = display.all - display.status_line)
+// --- Past SH
+shColor = input.color(color.red, 'Color', group = 'Past Swing High', display = display.all - display.status_line)
+shStyleStr = input.string('Dotted', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Past Swing High', display = display.all - display.status_line)
+shWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing High', display = display.all - display.status_line)
+// --- Current SL
+slExtColor = input.color(color.aqua, 'Color', group = 'Current Swing Low', display = display.all - display.status_line)
+slExtStyleStr = input.string('Solid', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Current Swing Low', display = display.all - display.status_line)
+slExtWidth = input.int(3, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing Low', display = display.all - display.status_line)
+// --- Past SL
+slColor = input.color(color.aqua, 'Color', group = 'Past Swing Low', display = display.all - display.status_line)
+slStyleStr = input.string('Dotted', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Past Swing Low', display = display.all - display.status_line)
+slWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing Low', display = display.all - display.status_line)
+
+// === STYLE MAPPINGS ===
+shExtStyle = shExtStyleStr == 'Dotted' ? line.style_dotted : shExtStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
+shStyle = shStyleStr == 'Dotted' ? line.style_dotted : shStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
+slExtStyle = slExtStyleStr == 'Dotted' ? line.style_dotted : slExtStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
+slStyle = slStyleStr == 'Dotted' ? line.style_dotted : slStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
+
+
+
+dbRangeAtr = (ta.atr(doubeBottomATRLength) * doubleBottomATRBand) / 2
+
+
+// === VARS ===
+var line currentHighLine = na
+var line currentLowLine = na
+var float currentHigh = na
+var float currentLow = na
+var int currentHighStart = na
+var int currentLowStart = na
+var array<line> pastHighLines = array.new_line()
+var array<float> pastHighPrices = array.new_float()
+var array<line> pastLowLines = array.new_line()
+var array<float> pastLowPrices = array.new_float()
+
+// Current bands
+var line currentHighBandTopLine = na
+var line currentHighBandBotLine = na
+var line currentLowBandTopLine  = na
+var line currentLowBandBotLine  = na
+var float currentHighBandHalf = na
+var float currentLowBandHalf  = na
+
+// Past band arrays (parallel to your pastHigh/Low arrays)
+var array<line> pastHighBandTopLines = array.new_line()
+var array<line> pastHighBandBotLines = array.new_line()
+var array<line> pastLowBandTopLines  = array.new_line()
+var array<line> pastLowBandBotLines  = array.new_line()
+
+useCloseForSweep = sweepConditionOpt == "Close Break"
+
+
+// === SWING LOGIC ===
+isSwingHigh = true
+for i = 1 to swingStrengthHigh by 1
+    isSwingHigh := isSwingHigh and swingSourceHigh[swingStrengthHigh] > swingSourceHigh[swingStrengthHigh + i]
+    isSwingHigh := isSwingHigh and swingSourceHigh[swingStrengthHigh] > swingSourceHigh[swingStrengthHigh - i]
+    isSwingHigh
+swingHigh = isSwingHigh ? swingSourceHigh[swingStrengthHigh] : na
+
+isSwingLow = true
+for i = 1 to swingStrengthLow by 1
+    isSwingLow := isSwingLow and swingSourceLow[swingStrengthLow] < swingSourceLow[swingStrengthLow + i]
+    isSwingLow := isSwingLow and swingSourceLow[swingStrengthLow] < swingSourceLow[swingStrengthLow - i]
+    isSwingLow
+swingLow = isSwingLow ? swingSourceLow[swingStrengthLow] : na
+
+// === BREAK CONDITIONS ===
+highBroken = not na(currentHigh) and high > currentHigh
+lowBroken = not na(currentLow) and low < currentLow
+
+// === HANDLE SWING HIGH ===
+if not na(swingHigh)
+    if not na(currentHighLine)
+        line.set_extend(currentHighLine, extend.none)
+        line.set_style(currentHighLine, shStyle)
+        array.push(pastHighLines, line.new(currentHighStart, currentHigh, bar_index, currentHigh, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+        array.push(pastHighPrices, currentHigh)
+        line.delete(currentHighLine)
+
+        // Archive CURRENT HIGH bands to PAST (if they exist)
+        if not na(currentHighBandTopLine) and not na(currentHighBandBotLine)
+            array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+            array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+            line.delete(currentHighBandTopLine)
+            line.delete(currentHighBandBotLine)
+            currentHighBandTopLine := na
+            currentHighBandBotLine := na
+            currentHighBandHalf    := na
+   
+    currentHigh := swingHigh
+    currentHighStart := bar_index - swingStrengthHigh
+    currentHighLine := line.new(currentHighStart, swingHigh, bar_index, swingHigh, color = shExtColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
+    currentHighBandHalf := dbRangeAtr
+    currentHighBandTopLine := line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shExtColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
+    currentHighBandBotLine := line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shExtColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
+    currentHighLine
+
+
+
+
+
+// === HANDLE SWING LOW ===
+if not na(swingLow)
+    if not na(currentLowLine)
+        line.set_extend(currentLowLine, extend.none)
+        line.set_style(currentLowLine, slStyle)
+        array.push(pastLowLines, line.new(currentLowStart, currentLow, bar_index, currentLow, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+        array.push(pastLowPrices, currentLow)
+        line.delete(currentLowLine)
+
+        // Archive CURRENT LOW bands to PAST (if they exist)
+        if not na(currentLowBandTopLine) and not na(currentLowBandBotLine)
+            array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf,
+                 color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+            array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf,
+                 color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+            line.delete(currentLowBandTopLine)
+            line.delete(currentLowBandBotLine)
+            currentLowBandTopLine := na
+            currentLowBandBotLine := na
+            currentLowBandHalf    := na
+
+    currentLow := swingLow
+    currentLowStart := bar_index - swingStrengthLow
+    currentLowLine := line.new(currentLowStart, swingLow, bar_index, swingLow, color = slExtColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
+    currentLowBandHalf    := dbRangeAtr
+    currentLowBandTopLine := line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slExtColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
+    currentLowBandBotLine := line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slExtColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
+    currentLowLine
+
+// === EXTEND CURRENT LINES TO CURRENT BAR ===
+if not na(currentHighLine)
+    line.set_x2(currentHighLine, bar_index)
+    line.set_y2(currentHighLine, currentHigh)
+
+if not na(currentLowLine)
+    line.set_x2(currentLowLine, bar_index)
+    line.set_y2(currentLowLine, currentLow)
+
+// Extend HIGH bands
+if not na(currentHighBandTopLine)
+    line.set_x2(currentHighBandTopLine, bar_index)
+    line.set_y2(currentHighBandTopLine, currentHigh + currentHighBandHalf)
+if not na(currentHighBandBotLine)
+    line.set_x2(currentHighBandBotLine, bar_index)
+    line.set_y2(currentHighBandBotLine, currentHigh - currentHighBandHalf)
+
+// Extend LOW bands
+if not na(currentLowBandTopLine)
+    line.set_x2(currentLowBandTopLine, bar_index)
+    line.set_y2(currentLowBandTopLine, currentLow + currentLowBandHalf)
+if not na(currentLowBandBotLine)
+    line.set_x2(currentLowBandBotLine, bar_index)
+    line.set_y2(currentLowBandBotLine, currentLow - currentLowBandHalf)
+
+// === HANDLE BREAKS ===
+if highBroken
+    // archive the current high base line to "past"
+    line.set_extend(currentHighLine, extend.none)
+    line.set_style(currentHighLine, shStyle)
+    array.push(pastHighLines, line.new(currentHighStart, currentHigh, bar_index, currentHigh, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+    array.push(pastHighPrices, currentHigh)
+
+    // archive the CURRENT HIGH bands to "past" BEFORE clearing vars
+    if not na(currentHighBandTopLine) and not na(currentHighBandBotLine)
+        array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+        array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+        line.delete(currentHighBandTopLine)
+        line.delete(currentHighBandBotLine)
+        currentHighBandTopLine := na
+        currentHighBandBotLine := na
+        currentHighBandHalf    := na
+
+    // now clear the current high base line + vars
+    line.delete(currentHighLine)
+    currentHighLine  := na
+    currentHigh      := na
+    currentHighStart := na
+
+if lowBroken
+    // archive the current low base line to "past"
+    line.set_extend(currentLowLine, extend.none)
+    line.set_style(currentLowLine, slStyle)
+    array.push(pastLowLines, line.new(currentLowStart, currentLow, bar_index, currentLow, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+    array.push(pastLowPrices, currentLow)
+
+    // archive CURRENT LOW bands to "past" BEFORE clearing vars
+    if not na(currentLowBandTopLine) and not na(currentLowBandBotLine)
+        array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+        array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+        line.delete(currentLowBandTopLine)
+        line.delete(currentLowBandBotLine)
+        currentLowBandTopLine := na
+        currentLowBandBotLine := na
+        currentLowBandHalf    := na
+
+    // now clear the current low base line + vars
+    line.delete(currentLowLine)
+    currentLowLine  := na
+    currentLow      := na
+    currentLowStart := na
+
+// === REMOVE SWEPT PAST LEVELS ===
+if removeSweptLevels
+    // Sweep Highs
+    i = array.size(pastHighPrices) - 1
+    while i >= 0
+        lvl = array.get(pastHighPrices, i)
+        if (useCloseForSweep ? close > lvl : high > lvl)
+            line.delete(array.get(pastHighLines, i))
+            array.remove(pastHighLines, i)
+            array.remove(pastHighPrices, i)
+
+            // delete matching band lines at the same index (if they exist)
+            if array.size(pastHighBandTopLines) > i
+                line.delete(array.get(pastHighBandTopLines, i))
+                array.remove(pastHighBandTopLines, i)
+            if array.size(pastHighBandBotLines) > i
+                line.delete(array.get(pastHighBandBotLines, i))
+                array.remove(pastHighBandBotLines, i)
+        i := i - 1
+        i
+
+    // Sweep Lows
+    j = array.size(pastLowPrices) - 1
+    while j >= 0
+        lvl = array.get(pastLowPrices, j)
+        if (useCloseForSweep ? close < lvl : low < lvl)
+            line.delete(array.get(pastLowLines, j))
+            array.remove(pastLowLines, j)
+            array.remove(pastLowPrices, j)
+            // delete matching band lines at the same index (if they exist)
+            if array.size(pastLowBandTopLines) > j
+                line.delete(array.get(pastLowBandTopLines, j))
+                array.remove(pastLowBandTopLines, j)
+            if array.size(pastLowBandBotLines) > j
+                line.delete(array.get(pastLowBandBotLines, j))
+                array.remove(pastLowBandBotLines, j)
+        j := j - 1
+        j
+
+// === ALERT CONDITIONS ===
+alertcondition(highBroken, title = 'Swing High Broken', message = '🔔 Swing High Broken at {{close}}')
+alertcondition(lowBroken, title = 'Swing Low Broken', message = '🔔 Swing Low Broken at {{close}}')
+//updated chart.
+
+plot(close)
+
