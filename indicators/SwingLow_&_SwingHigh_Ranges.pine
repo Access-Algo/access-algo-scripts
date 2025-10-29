@@ -36,6 +36,8 @@ swingSourceHigh = input.source(high, title = 'Swing high source', display = disp
 swingSourceLow = input.source(low, title = 'Swing low source', display = display.all - display.status_line)
 removeSweptLevels = input.bool(false, title = 'Delete swept double bottoms', tooltip = 'When enabled, past swing lines will be deleted if price closes through them.')
 sweepConditionOpt = input.string("Close Break", title = "Sweep condition type", options = ["Wick Break", "Close Break"], tooltip = "Choose whether swing levels are deleted when price wicks through them (high/low) or closes through them (close).")
+// --- Post-break extension ---
+extendAfterBreakBars = input.int(2, "Extend zones N bars after invalidation", minval=0, tooltip="Keeps the swing line and its ATR band visible for N bars after the level is broken.")
 
 
 doubeBottomATRLength = input.int(14, title = "Double Bottom ATR length")
@@ -95,6 +97,24 @@ var array<line> pastHighBandTopLines = array.new_line()
 var array<line> pastHighBandBotLines = array.new_line()
 var array<line> pastLowBandTopLines  = array.new_line()
 var array<line> pastLowBandBotLines  = array.new_line()
+
+// Post-break extension handles (HIGH side)
+var line extHighBaseLine = na
+var line extHighBandTopLine = na
+var line extHighBandBotLine = na
+var int extHighBarsLeft = 0
+var float extHighPrice = na
+var float extHighBandHalf = na
+
+
+// Post-break extension handles (LOW side)
+var line extLowBaseLine = na
+var line extLowBandTopLine = na
+var line extLowBandBotLine = na
+var int extLowBarsLeft = 0
+var float extLowPrice = na
+var float extLowBandHalf = na
+
 
 useCloseForSweep = sweepConditionOpt == "Close Break"
 
@@ -203,6 +223,50 @@ if not na(currentLowBandBotLine)
     line.set_x2(currentLowBandBotLine, bar_index)
     line.set_y2(currentLowBandBotLine, currentLow - currentLowBandHalf)
 
+// Post-break extension updater (HIGH)
+if extHighBarsLeft > 0
+    // extend horizontally to the current bar
+    line.set_x2(extHighBaseLine, bar_index)
+    line.set_x2(extHighBandTopLine, bar_index)
+    line.set_x2(extHighBandBotLine, bar_index)
+    // keep y fixed
+    line.set_y2(extHighBaseLine,    extHighPrice)
+    line.set_y2(extHighBandTopLine, extHighPrice + extHighBandHalf)
+    line.set_y2(extHighBandBotLine, extHighPrice - extHighBandHalf)
+
+    if barstate.isconfirmed
+        extHighBarsLeft -= 1
+        if extHighBarsLeft <= 0
+            line.delete(extHighBaseLine)
+            line.delete(extHighBandTopLine)
+            line.delete(extHighBandBotLine)
+            extHighBaseLine    := na
+            extHighBandTopLine := na
+            extHighBandBotLine := na
+            extHighPrice       := na
+            extHighBandHalf    := na
+
+// Post-break extension updater (LOW)
+if extLowBarsLeft > 0
+    line.set_x2(extLowBaseLine, bar_index)
+    line.set_x2(extLowBandTopLine, bar_index)
+    line.set_x2(extLowBandBotLine, bar_index)
+    line.set_y2(extLowBaseLine,    extLowPrice)
+    line.set_y2(extLowBandTopLine, extLowPrice + extLowBandHalf)
+    line.set_y2(extLowBandBotLine, extLowPrice - extLowBandHalf)
+
+    if barstate.isconfirmed
+        extLowBarsLeft -= 1
+        if extLowBarsLeft <= 0
+            line.delete(extLowBaseLine)
+            line.delete(extLowBandTopLine)
+            line.delete(extLowBandBotLine)
+            extLowBaseLine    := na
+            extLowBandTopLine := na
+            extLowBandBotLine := na
+            extLowPrice       := na
+            extLowBandHalf    := na
+
 // === HANDLE BREAKS ===
 if highBroken
     // archive the current high base line to "past"
@@ -215,13 +279,22 @@ if highBroken
     if not na(currentHighBandTopLine) and not na(currentHighBandBotLine)
         array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
         array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
-        line.delete(currentHighBandTopLine)
-        line.delete(currentHighBandBotLine)
-        currentHighBandTopLine := na
-        currentHighBandBotLine := na
-        currentHighBandHalf    := na
+        
+    // spawn post-break extension clones for N bars
+    if extendAfterBreakBars > 0
+        extHighPrice    := currentHigh
+        extHighBandHalf := currentHighBandHalf
+        extHighBaseLine    := line.new(bar_index, extHighPrice, bar_index, extHighPrice, color = shColor, width = shWidth, style = shStyle, extend = extend.none)
+        extHighBandTopLine := line.new(bar_index, extHighPrice + extHighBandHalf, bar_index, extHighPrice + extHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none)
+        extHighBandBotLine := line.new(bar_index, extHighPrice - extHighBandHalf, bar_index, extHighPrice - extHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none)
+        extHighBarsLeft := extendAfterBreakBars
 
     // now clear the current high base line + vars
+    line.delete(currentHighBandTopLine)
+    line.delete(currentHighBandBotLine)
+    currentHighBandTopLine := na
+    currentHighBandBotLine := na
+    currentHighBandHalf    := na
     line.delete(currentHighLine)
     currentHighLine  := na
     currentHigh      := na
@@ -238,13 +311,22 @@ if lowBroken
     if not na(currentLowBandTopLine) and not na(currentLowBandBotLine)
         array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
         array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
-        line.delete(currentLowBandTopLine)
-        line.delete(currentLowBandBotLine)
-        currentLowBandTopLine := na
-        currentLowBandBotLine := na
-        currentLowBandHalf    := na
+   
+    // spawn post-break extension clones for N bars
+    if extendAfterBreakBars > 0
+        extLowPrice    := currentLow
+        extLowBandHalf := currentLowBandHalf
+        extLowBaseLine    := line.new(bar_index, extLowPrice, bar_index, extLowPrice, color = slColor, width = slWidth, style = slStyle, extend = extend.none)
+        extLowBandTopLine := line.new(bar_index, extLowPrice + extLowBandHalf, bar_index, extLowPrice + extLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none)
+        extLowBandBotLine := line.new(bar_index, extLowPrice - extLowBandHalf, bar_index, extLowPrice - extLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none)
+        extLowBarsLeft := extendAfterBreakBars
 
     // now clear the current low base line + vars
+    line.delete(currentLowBandTopLine)
+    line.delete(currentLowBandBotLine)
+    currentLowBandTopLine := na
+    currentLowBandBotLine := na
+    currentLowBandHalf    := na
     line.delete(currentLowLine)
     currentLowLine  := na
     currentLow      := na
@@ -303,20 +385,30 @@ allowancePt = input.float(0.0,    "Engulf open allowance (pts)", group=GRP_REV, 
 rejWickMax  = input.float(0.0,    "Max rejection wick/body (0=off)", group=GRP_REV)
 
 // Guard: we only have valid zones when current swing + half-width exist
-haveLowZone  = not na(currentLow)  and not na(currentLowBandHalf)
-haveHighZone = not na(currentHigh) and not na(currentHighBandHalf)
+haveLowZoneCur   = not na(currentLow)  and not na(currentLowBandHalf)
+haveHighZoneCur  = not na(currentHigh) and not na(currentHighBandHalf)
+
+// 🟢 NEW — Extension zone guards
+haveLowZoneEx    = extLowBarsLeft  > 0 and not na(extLowPrice)  and not na(extLowBandHalf)
+haveHighZoneEx   = extHighBarsLeft > 0 and not na(extHighPrice) and not na(extHighBandHalf)
 
 // In-zone checks (choose close or extrema)
 priceForLowZone  = useCloseForZone ? close : low
 priceForHighZone = useCloseForZone ? close : high
 
-inLowZone  = haveLowZone  and (priceForLowZone  >= currentLow  - currentLowBandHalf)  and (priceForLowZone  <= currentLow  + currentLowBandHalf)
-inHighZone = haveHighZone and (priceForHighZone >= currentHigh - currentHighBandHalf) and (priceForHighZone <= currentHigh + currentHighBandHalf)
+inLowZoneCur  = haveLowZoneCur  and (priceForLowZone  >= (currentLow  - currentLowBandHalf))  and (priceForLowZone  <= (currentLow  + currentLowBandHalf))
+inHighZoneCur = haveHighZoneCur and (priceForHighZone >= (currentHigh - currentHighBandHalf)) and (priceForHighZone <= (currentHigh + currentHighBandHalf))
+
+inLowZoneEx   = haveLowZoneEx   and (priceForLowZone  >= (extLowPrice  - extLowBandHalf))   and (priceForLowZone  <= (extLowPrice  + extLowBandHalf))
+inHighZoneEx  = haveHighZoneEx  and (priceForHighZone >= (extHighPrice - extHighBandHalf))  and (priceForHighZone <= (extHighPrice + extHighBandHalf))
+
+inLowZone  = inLowZoneCur  or inLowZoneEx
+inHighZone = inHighZoneCur or inHighZoneEx
 
 // Candlestick patterns (evaluated on this bar)
 bullPin = zen.isHammer(hammerFib, false)
 bearPin = zen.isStar(starFib, false)
-bullEng = zen.isBullishEC(allowancePt, rejWickMax, engulfWick) 
+bullEng = zen.isBullishEC(allowancePt, rejWickMax, engulfWick)
 bearEng = zen.isBearishEC(allowancePt, rejWickMax, engulfWick)
 
 // Triggers: zone + correct reversal direction
@@ -335,5 +427,3 @@ alertcondition(lowBroken, title = 'Swing Low Broken', message = '🔔 Swing Low 
 //updated chart.
 
 plot(close)
-
-
