@@ -1,27 +1,33 @@
 // ─────────────────────────────────────────────────────────────
-// ACCESS ALGO – Swing Levels Indicator
+// ACCESS ALGO – Project 19 -FxPro Walkforward
 // © Hc_Sunt_Lucrum | access-algo.com
 // This script is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
 //
-// Description: Lookback for Swing Levels. Then plots a range in order of ATR where other strategies may be able to use as a trigger.
+// Description: Project 19.5 experiments with fixed closed paramters. Such as next green candle close.
 // 
 //
-// Usage: Public
+// Usage: Private
 // Designed for TradingView. Compatible with Pine Script v6.
 // Free to use under invite-only rules or for educational purposes.
 //
-// Version:         v1
-// Last Updated:    2025-10-20
+// Version:         v16
+// Last Updated:    2025-07-17
 // Author:          Hc_Sunt_Lucrum
 // Contact:         access-algo.com | TradingView: @Hc_Sunt_Lucrum
 // ─────────────────────────────────────────────────────────────
+
+
+//strategy("Client Build 117 - DAX Reversals ", overlay=true, default_qty_type=strategy.percent_of_equity, initial_capital=100000, currency=currency.USD,calc_on_order_fills = true)
 
 // This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © Hc_Sunt_Lucrum
 
 //@version=6
-indicator('Swing Levels', overlay = true, max_lines_count = 500)
+indicator('Swing High Low Detector by RV5', overlay = true, max_lines_count = 500)
+
+// Import Zen if not already present in this file:
+import ZenAndTheArtOfTrading/ZenLibrary/10 as zen
 
 // === INPUTS ===
 swingStrengthHigh = input.int(5, minval = 1, title = 'Swing high Lookback', tooltip = "How many candles to look back and determine and local Swing High upon which to trigger a doubble bottom search", display = display.all - display.status_line)
@@ -283,10 +289,51 @@ if removeSweptLevels
         j := j - 1
         j
 
+
+// === REVERSAL CANDLE ENTRY LOGIC (zone-based) ============================
+
+
+// Inputs (optional fine-tune)
+var const string GRP_REV = "Zone Reversal Triggers"
+useCloseForZone = input.bool(false, "Zone test uses CLOSE (else LOW/HIGH)", group=GRP_REV, tooltip="If true, close must be inside the band; else we use low for lows and high for highs.")
+hammerFib   = input.float(0.382, "Hammer fib (pin bar)", minval=0, maxval=1, group=GRP_REV)
+starFib     = input.float(0.382, "Shooting star fib (pin)", minval=0, maxval=1, group=GRP_REV)
+engulfWick  = input.bool(false,   "Engulf must include wick?", group=GRP_REV)
+allowancePt = input.float(0.0,    "Engulf open allowance (pts)", group=GRP_REV, tooltip="Tolerance for tiny open gaps")
+rejWickMax  = input.float(0.0,    "Max rejection wick/body (0=off)", group=GRP_REV)
+
+// Guard: we only have valid zones when current swing + half-width exist
+haveLowZone  = not na(currentLow)  and not na(currentLowBandHalf)
+haveHighZone = not na(currentHigh) and not na(currentHighBandHalf)
+
+// In-zone checks (choose close or extrema)
+priceForLowZone  = useCloseForZone ? close : low
+priceForHighZone = useCloseForZone ? close : high
+
+inLowZone  = haveLowZone  and (priceForLowZone  >= currentLow  - currentLowBandHalf)  and (priceForLowZone  <= currentLow  + currentLowBandHalf)
+inHighZone = haveHighZone and (priceForHighZone >= currentHigh - currentHighBandHalf) and (priceForHighZone <= currentHigh + currentHighBandHalf)
+
+// Candlestick patterns (evaluated on this bar)
+bullPin = zen.isHammer(hammerFib, false)
+bearPin = zen.isStar(starFib, false)
+bullEng = zen.isBullishEC(allowancePt, rejWickMax, engulfWick) 
+bearEng = zen.isBearishEC(allowancePt, rejWickMax, engulfWick)
+
+// Triggers: zone + correct reversal direction
+longZoneTrigger  = inLowZone  and (bullPin or bullEng)   // double-bottom style
+shortZoneTrigger = inHighZone and (bearPin or bearEng)   // double-top style
+
+// Plots
+plotshape(longZoneTrigger,  title="Swing-Low Zone Bull Reversal",  style=shape.triangleup,   location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny, text="DB")
+plotshape(shortZoneTrigger, title="Swing-High Zone Bear Reversal", style=shape.triangledown, location=location.abovebar, color=color.new(color.red,  0), size=size.tiny, text="DT")
+
+
+
 // === ALERT CONDITIONS ===
 alertcondition(highBroken, title = 'Swing High Broken', message = '🔔 Swing High Broken at {{close}}')
 alertcondition(lowBroken, title = 'Swing Low Broken', message = '🔔 Swing Low Broken at {{close}}')
 //updated chart.
 
 plot(close)
+
 
