@@ -26,19 +26,22 @@ indicator("Run + Reversal Detector (module)", overlay=true, max_labels_count=500
 import ZenAndTheArtOfTrading/ZenLibrary/10 as zen
 
 // ===================== Inputs ===================== //
-var const string GRP = "Run + Reversal"
-runLen      = input.int(4,  "Run length (bars)",      minval=2, group=GRP)
-colorRuns   = input.bool(true, "Recolor candles during run",   group=GRP)
-runBullCol  = input.color(color.new(color.lime, 0), "Run color (bull)", group=GRP)
-runBearCol  = input.color(color.new(color.red,  0), "Run color (bear)", group=GRP)
-dojiBreaks  = input.bool(true, "Doji breaks the run", tooltip="If true, a neutral candle ends the run.", group=GRP)
+var const string GRP = "================== ⚡ Run Exhaustion ⚡=================="
+runLen      = input.int(4, title = "Run length (bars)", minval=2, tooltip = "the run count of bars before searching for an entry bar, if 4, bar 5 must be a vlaid entry", group=GRP)
+colorRuns   = input.bool(true, title =  "Recolour run candles", tooltip = "Changes the colour of the run candles for extra visual help", group=GRP)
+dojiBreaks  = input.bool(true, title =  "Doji breaks the run", tooltip="If true, a neutral candle ends the run, suggestion: leave on", group=GRP)
+runBullCol  = input.color(color.new(color.white, 0), title =  "Run color (bull)", group=GRP)
+runBearCol  = input.color(color.new(color.white,  0), title =  "Run color (bear)", group=GRP)
 
-// Pin/Engulfing parameters (wired to ZenLibrary)
-hammerFib   = input.float(0.382, "Hammer fib (pin bar)",               minval=0, maxval=1, group=GRP)
-starFib     = input.float(0.382, "Shooting star fib (pin)",             minval=0, maxval=1, group=GRP)
-engulfWick  = input.bool(false,   "Engulf must include wick?",                         group=GRP)
-allowancePt = input.float(0.5,    "Engulf open allowance (pts)", tooltip="Tolerance for small gaps at open.", group=GRP)
-rejWickMax  = input.float(0.0,    "Max rejection wick/body (0=off)",                  group=GRP)
+
+var const string pin_Params = "Pin Bar Settings"
+var const string EC_Params = "Engulfing Candle Settings"
+hammerFib   = input.float(0.382, title = "Hammer fib (pin bar)", tooltip =  "Defines where the candle body must sit within its range.\nFor a hammer: fib is measured from the low upward.\n• 0.25 = body in bottom quarter of candle (strict)\n• 0.50 = body in lower half (looser)\nDefault 0.382 ≈ lower 38% of range.", minval=0, maxval=1, group=pin_Params)
+starFib     = input.float(0.382, title = "Shooting star fib (pin)", tooltip = "Defines where the candle body must sit within its range.\nFor a shooting star: fib is measured from the high downward.\n• 0.25 = body in top quarter of candle (strict)\n• 0.50 = body in upper half (looser)\nDefault 0.382 ≈ upper 38% of range.", minval=0, maxval=1, group=pin_Params)
+colorMatch  = input.bool(false, title = "Pin bar bullish or bearish?", tooltip= "Pin bars must close bullish for a Hammer and bearish for a Star", group=pin_Params)
+engulfWick  = input.bool(false, title = "Engulf previous wick", tooltip= "If an engulfing candle occurs, to be valid it must engulf the previous wick and not just the body", group=EC_Params)
+allowancePt = input.float(0.2, title = "Engulf open allowance (pts)", tooltip="Tolerance for small gaps at open, it's good practice to leave a few points tolerance as gaps are prevailant", group=EC_Params)
+rejWickMax  = input.float(0.0, title =  "Max allowable Wick/Body (0 = off)", tooltip = "Optional cleanliness filter for engulfing candles.\n0 = disabled.\nIf > 0: the wick on the rejection side must be smaller than this multiple of the candle body.\ne.g. 0.5 = wick must be < 50% of body.\nBullish: checks the TOP wick. Bearish: checks the BOTTOM wick." ,group=EC_Params)
 // ===================== Helpers ===================== //
 getDir() => close > open ? 1 : close < open ? -1 : 0  // 1=bull, -1=bear, 0=doji
 
@@ -53,8 +56,8 @@ curDir = getDir()
 potentialBreak = (rr_dir != 0 and curDir != 0 and curDir != rr_dir) or (curDir == 0 and dojiBreaks)
 
 // Precompute reversal patterns **on this bar**
-bullPin = zen.isHammer(hammerFib, false)            // bullish pin (hammer)
-bearPin = zen.isStar(starFib, false)                // bearish pin (shooting star)
+bullPin = zen.isHammer(hammerFib, colorMatch)            // bullish pin (hammer)
+bearPin = zen.isStar(starFib, colorMatch)                // bearish pin (shooting star)
 bullEng = zen.isBullishEC(allowancePt, rejWickMax, engulfWick)
 bearEng = zen.isBearishEC(allowancePt, rejWickMax, engulfWick)
 
@@ -98,11 +101,11 @@ if colorRuns and rr_armed and curDir == rr_dir and curDir != 0
 barcolor(_runCol)
 
 // ===================== Signals (triangles on valid run ends) ===================== //
-shortSetup  = runEnded and rr_dir == -1   // red run ended by bullish reversal
-longSetup = runEnded and rr_dir ==  1   // green run ended by bearish reversal
+shortSetup  = runEnded and rr_dir == -1 and barstate.isconfirmed  // red run ended by bullish reversal
+longSetup = runEnded and rr_dir ==  1 and barstate.isconfirmed // green run ended by bearish reversal
 
-plotshape(longSetup,  title="Run End → Bullish Reversal", style=shape.triangleup,   location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny, text="▲")
-plotshape(shortSetup, title="Run End → Bearish Reversal", style=shape.triangledown, location=location.abovebar, color=color.new(color.red,  0), size=size.tiny, text="▼")
+plotshape(longSetup,  title="Run End → Bullish Reversal", style=shape.triangleup,   location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny, text="4+")
+plotshape(shortSetup, title="Run End → Bearish Reversal", style=shape.triangledown, location=location.abovebar, color=color.new(color.red,  0), size=size.tiny, text="4+")
 
 // Debug (optional)
 // label.new(bar_index, high,  "streak="+str.tostring(rr_streak)+" dir="+str.tostring(rr_dir)+" armed="+str.tostring(rr_armed))

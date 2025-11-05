@@ -24,10 +24,72 @@
 // © Hc_Sunt_Lucrum
 
 //@version=6
-indicator('Swing High Low Detector by RV5', overlay = true, max_lines_count = 500)
+indicator('Swing High Low Detector with Entry bars', overlay = true, max_lines_count = 500)
 
 // Import Zen if not already present in this file:
 import ZenAndTheArtOfTrading/ZenLibrary/10 as zen
+
+// { Time/Date/Session =====================================================//
+// Date window (keep as-is)
+var const string title_and_next = "=============== Backtest Time Periods ==============="
+fromDay   = input.int(1,  "D", minval = 1, maxval = 31, inline="1", group=title_and_next)
+fromMonth = input.int(1,  "M", minval = 1, maxval = 12, inline="1", group=title_and_next)
+fromYear  = input.int(2010, "Y", minval = 1970, inline="1", group=title_and_next)
+toDay     = input.int(31, "D", minval = 1, maxval = 31, inline="2", group=title_and_next)
+toMonth   = input.int(12, "M", minval = 1, maxval = 12, inline="2", group=title_and_next)
+toYear    = input.int(2099, "Y", minval = 1970, inline="2", group=title_and_next)
+
+startDate  = timestamp(fromYear, fromMonth, fromDay, 00, 00)
+finishDate = timestamp(toYear,   toMonth,   toDay,   23, 59)
+date_cond  = (time >= startDate and time <= finishDate)
+
+var const string day_of_week = "--- Trading Days ---"
+is_trade_mon = input.bool(true,  "Mon", inline="dow", group=day_of_week)
+is_trade_tue = input.bool(true,  "Tue", inline="dow", group=day_of_week)
+is_trade_wed = input.bool(true,  "Wed", inline="dow", group=day_of_week)
+is_trade_thu = input.bool(true,  "Thu", inline="dow", group=day_of_week)
+is_trade_fri = input.bool(true,  "Fri", inline="dow", group=day_of_week)
+is_trade_sat = input.bool(true,  "Sat", inline="dow", group=day_of_week)
+is_trade_sun = input.bool(true,  "Sun", inline="dow", group=day_of_week)
+
+day_cond =
+     (dayofweek(time) == dayofweek.monday    and is_trade_mon) or
+     (dayofweek(time) == dayofweek.tuesday   and is_trade_tue) or
+     (dayofweek(time) == dayofweek.wednesday and is_trade_wed) or
+     (dayofweek(time) == dayofweek.thursday  and is_trade_thu) or
+     (dayofweek(time) == dayofweek.friday    and is_trade_fri) or
+     (dayofweek(time) == dayofweek.saturday  and is_trade_sat) or
+     (dayofweek(time) == dayofweek.sunday    and is_trade_sun)
+
+// Timezone
+UTC_offset = input.int(defval = 1, title='UTC Offset', tooltip = "Plus or minus hours of chart time", minval=-10, maxval=13, group=day_of_week)
+UTC_string = 'UTC' + (UTC_offset > 0 ? '+' : '') + (UTC_offset != 0 ? str.tostring(UTC_offset) : '')
+
+// TWO sessions – defaults from scope: 08:00–11:30 and 14:00–17:00 CET
+sess1 = input.session("0800-1130", "Session 1 (AM)", group='Trading Sessions')
+sess2 = input.session("1400-1700", "Session 2 (PM)", group='Trading Sessions')
+
+// Per-session time checks
+time_cond_1 = time(timeframe.period, sess1, UTC_string)
+time_cond_2 = time(timeframe.period, sess2, UTC_string)
+
+// Combined session condition
+session_cond = (not na(time_cond_1)) or (not na(time_cond_2))
+
+// Final condition
+final_time_cond = date_cond and day_cond and session_cond
+
+// Visual: show which session we're in
+bgcolor(not na(time_cond_1) and day_cond and date_cond ? color.new(color.green, 90) : not na(time_cond_2) and day_cond and date_cond ? color.new(color.blue,  90) : na)
+
+// This is what you'll use later to gate entries:
+isinSession = final_time_cond
+
+
+
+
+
+
 
 // === INPUTS ===
 swingStrengthHigh = input.int(5, minval = 1, title = 'Swing high Lookback', tooltip = "How many candles to look back and determine and local Swing High upon which to trigger a doubble bottom search", display = display.all - display.status_line)
@@ -45,21 +107,23 @@ doubleBottomATRBand = input.float(1, title = "Double Bottom Zone ATR Multiplier"
 
 // === STYLE INPUTS ===
 // --- Current SH
-shExtColor = input.color(color.red, 'Color', group = 'Current Swing High', display = display.all - display.status_line)
+shExtColor = input.color(color.red, 'Colour', group = 'Current Swing High', display = display.all - display.status_line)
 shExtStyleStr = input.string('Solid', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Current Swing High', display = display.all - display.status_line)
-shExtWidth = input.int(3, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing High', display = display.all - display.status_line)
+shExtWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing High', display = display.all - display.status_line)
 // --- Past SH
-shColor = input.color(color.red, 'Color', group = 'Past Swing High', display = display.all - display.status_line)
+shColor = input.color(color.red, 'Colour', group = 'Past Swing High', display = display.all - display.status_line)
+shBandColor = input.color(color.white, 'Colour', group = 'Past Swing High', display = display.all - display.status_line)
 shStyleStr = input.string('Dotted', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Past Swing High', display = display.all - display.status_line)
-shWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing High', display = display.all - display.status_line)
+shWidth = input.int(1, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing High', display = display.all - display.status_line)
 // --- Current SL
-slExtColor = input.color(color.aqua, 'Color', group = 'Current Swing Low', display = display.all - display.status_line)
+slExtColor = input.color(color.aqua, 'Colour', group = 'Current Swing Low', display = display.all - display.status_line)
 slExtStyleStr = input.string('Solid', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Current Swing Low', display = display.all - display.status_line)
-slExtWidth = input.int(3, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing Low', display = display.all - display.status_line)
+slExtWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing Low', display = display.all - display.status_line)
 // --- Past SL
-slColor = input.color(color.aqua, 'Color', group = 'Past Swing Low', display = display.all - display.status_line)
+slColor = input.color(color.aqua, 'Colour', group = 'Past Swing Low', display = display.all - display.status_line)
+slBandColor = input.color(color.white, 'Colour', group = 'Past Swing Low', display = display.all - display.status_line)
 slStyleStr = input.string('Dotted', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Past Swing Low', display = display.all - display.status_line)
-slWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing Low', display = display.all - display.status_line)
+slWidth = input.int(1, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing Low', display = display.all - display.status_line)
 
 // === STYLE MAPPINGS ===
 shExtStyle = shExtStyleStr == 'Dotted' ? line.style_dotted : shExtStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
@@ -149,8 +213,8 @@ if not na(swingHigh)
 
         // Archive CURRENT HIGH bands to PAST (if they exist)
         if not na(currentHighBandTopLine) and not na(currentHighBandBotLine)
-            array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
-            array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+            array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
+            array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
             line.delete(currentHighBandTopLine)
             line.delete(currentHighBandBotLine)
             currentHighBandTopLine := na
@@ -161,8 +225,8 @@ if not na(swingHigh)
     currentHighStart := bar_index - swingStrengthHigh
     currentHighLine := line.new(currentHighStart, swingHigh, bar_index, swingHigh, color = shExtColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
     currentHighBandHalf := dbRangeAtr
-    currentHighBandTopLine := line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shExtColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
-    currentHighBandBotLine := line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shExtColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
+    currentHighBandTopLine := line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shBandColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
+    currentHighBandBotLine := line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shBandColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
     currentHighLine
 
 
@@ -180,10 +244,8 @@ if not na(swingLow)
 
         // Archive CURRENT LOW bands to PAST (if they exist)
         if not na(currentLowBandTopLine) and not na(currentLowBandBotLine)
-            array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf,
-                 color = slColor, width = slWidth, style = slStyle, extend = extend.none))
-            array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf,
-                 color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+            array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
+            array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
             line.delete(currentLowBandTopLine)
             line.delete(currentLowBandBotLine)
             currentLowBandTopLine := na
@@ -194,8 +256,8 @@ if not na(swingLow)
     currentLowStart := bar_index - swingStrengthLow
     currentLowLine := line.new(currentLowStart, swingLow, bar_index, swingLow, color = slExtColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
     currentLowBandHalf    := dbRangeAtr
-    currentLowBandTopLine := line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slExtColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
-    currentLowBandBotLine := line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slExtColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
+    currentLowBandTopLine := line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slBandColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
+    currentLowBandBotLine := line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slBandColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
     currentLowLine
 
 // === EXTEND CURRENT LINES TO CURRENT BAR ===
@@ -277,16 +339,16 @@ if highBroken
 
     // archive the CURRENT HIGH bands to "past" BEFORE clearing vars
     if not na(currentHighBandTopLine) and not na(currentHighBandBotLine)
-        array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
-        array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+        array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
+        array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
         
     // spawn post-break extension clones for N bars
     if extendAfterBreakBars > 0
         extHighPrice    := currentHigh
         extHighBandHalf := currentHighBandHalf
         extHighBaseLine    := line.new(bar_index, extHighPrice, bar_index, extHighPrice, color = shColor, width = shWidth, style = shStyle, extend = extend.none)
-        extHighBandTopLine := line.new(bar_index, extHighPrice + extHighBandHalf, bar_index, extHighPrice + extHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none)
-        extHighBandBotLine := line.new(bar_index, extHighPrice - extHighBandHalf, bar_index, extHighPrice - extHighBandHalf, color = shColor, width = shWidth, style = shStyle, extend = extend.none)
+        extHighBandTopLine := line.new(bar_index, extHighPrice + extHighBandHalf, bar_index, extHighPrice + extHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none)
+        extHighBandBotLine := line.new(bar_index, extHighPrice - extHighBandHalf, bar_index, extHighPrice - extHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none)
         extHighBarsLeft := extendAfterBreakBars
 
     // now clear the current high base line + vars
@@ -309,16 +371,16 @@ if lowBroken
 
     // archive CURRENT LOW bands to "past" BEFORE clearing vars
     if not na(currentLowBandTopLine) and not na(currentLowBandBotLine)
-        array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
-        array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+        array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
+        array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
    
     // spawn post-break extension clones for N bars
     if extendAfterBreakBars > 0
         extLowPrice    := currentLow
         extLowBandHalf := currentLowBandHalf
         extLowBaseLine    := line.new(bar_index, extLowPrice, bar_index, extLowPrice, color = slColor, width = slWidth, style = slStyle, extend = extend.none)
-        extLowBandTopLine := line.new(bar_index, extLowPrice + extLowBandHalf, bar_index, extLowPrice + extLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none)
-        extLowBandBotLine := line.new(bar_index, extLowPrice - extLowBandHalf, bar_index, extLowPrice - extLowBandHalf, color = slColor, width = slWidth, style = slStyle, extend = extend.none)
+        extLowBandTopLine := line.new(bar_index, extLowPrice + extLowBandHalf, bar_index, extLowPrice + extLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none)
+        extLowBandBotLine := line.new(bar_index, extLowPrice - extLowBandHalf, bar_index, extLowPrice - extLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none)
         extLowBarsLeft := extendAfterBreakBars
 
     // now clear the current low base line + vars
@@ -412,8 +474,8 @@ bullEng = zen.isBullishEC(allowancePt, rejWickMax, engulfWick)
 bearEng = zen.isBearishEC(allowancePt, rejWickMax, engulfWick)
 
 // Triggers: zone + correct reversal direction
-longZoneTrigger  = inLowZone  and (bullPin or bullEng)   // double-bottom style
-shortZoneTrigger = inHighZone and (bearPin or bearEng)   // double-top style
+longZoneTrigger  = barstate.isconfirmed and inLowZone  and (bullPin or bullEng) and isinSession  // double-bottom style
+shortZoneTrigger = barstate.isconfirmed and inHighZone and (bearPin or bearEng) and isinSession // double-top style
 
 // Plots
 plotshape(longZoneTrigger,  title="Swing-Low Zone Bull Reversal",  style=shape.triangleup,   location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny, text="DB")
