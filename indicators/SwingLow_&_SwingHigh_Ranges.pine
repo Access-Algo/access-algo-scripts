@@ -29,8 +29,8 @@ indicator('Swing High Low Detector with Entry bars', overlay = true, max_lines_c
 // Import Zen if not already present in this file:
 import ZenAndTheArtOfTrading/ZenLibrary/10 as zen
 
-// { Time/Date/Session =====================================================//
-// Date window (keep as-is)
+// Time/Date/Session =====================================================//
+//  { Date window (keep as-is)
 var const string title_and_next = "=============== Backtest Time Periods ==============="
 fromDay   = input.int(1,  "D", minval = 1, maxval = 31, inline="1", group=title_and_next)
 fromMonth = input.int(1,  "M", minval = 1, maxval = 12, inline="1", group=title_and_next)
@@ -62,12 +62,12 @@ day_cond =
      (dayofweek(time) == dayofweek.sunday    and is_trade_sun)
 
 // Timezone
-UTC_offset = input.int(defval = 1, title='UTC Offset', tooltip = "Plus or minus hours of chart time", minval=-10, maxval=13, group=day_of_week)
+UTC_offset = input.int(defval = 0, title='UTC Offset', tooltip = "Plus or minus hours of chart time", minval=-10, maxval=13, group=day_of_week)
 UTC_string = 'UTC' + (UTC_offset > 0 ? '+' : '') + (UTC_offset != 0 ? str.tostring(UTC_offset) : '')
 
 // TWO sessions – defaults from scope: 08:00–11:30 and 14:00–17:00 CET
-sess1 = input.session("0800-1130", "Session 1 (AM)", group='Trading Sessions')
-sess2 = input.session("1400-1700", "Session 2 (PM)", group='Trading Sessions')
+sess1 = input.session("0800-1130", "Session 1 (AM)", group='--- Trading Sessions ---')
+sess2 = input.session("1400-1700", "Session 2 (PM)", group='--- Trading Sessions ---')
 
 // Per-session time checks
 time_cond_1 = time(timeframe.period, sess1, UTC_string)
@@ -85,54 +85,34 @@ bgcolor(not na(time_cond_1) and day_cond and date_cond ? color.new(color.green, 
 // This is what you'll use later to gate entries:
 isinSession = final_time_cond
 
+// }
 
 
+// === INPUTS FOR SH/SL DETECTION ===
+// {
+var const string doubleBottom = "========== Double Bottom Detection Settings =========="
+swingStrengthHigh = input.int(5, minval = 1, title = 'Swing high Lookback', tooltip = "How many candles to look back and determine and local Swing High upon which to trigger a doubble bottom search", display = display.all - display.status_line, group = doubleBottom)
+swingStrengthLow = input.int(5, minval = 1, title = 'Swing low Lookback', tooltip = "How many candles to look back and determine and local Swing Low upon which to trigger a doubble bottom search", display = display.all - display.status_line, group = doubleBottom)
+swingSourceHigh = input.source(high, title = 'Swing high source', display = display.all - display.status_line, group = doubleBottom)
+swingSourceLow = input.source(low, title = 'Swing low source', display = display.all - display.status_line, group = doubleBottom)
+sweepConditionOpt = input.string("Close Break", title = "Sweep condition type", options = ["Wick Break", "Close Break"], tooltip = "Choose whether swing levels are deleted when price wicks through them (high/low) or closes through them (close).", group = doubleBottom)
+extendAfterBreakBars = input.int(2, "Extend zones N bars after invalidation", minval=0, tooltip="Keeps the swing line and its ATR band visible for N bars after the level is broken.",group = doubleBottom)
+doubeBottomATRLength = input.int(14, title = "Double Bottom ATR length", group = doubleBottom)
+doubleBottomATRBand = input.float(1, title = "Double Bottom Zone ATR Multiplier", tooltip = "Creates a band around a local Swing High or Swing Low, upon which to detect the presence of a reversal candle and confirm and double bottom entry. Number multiplies the Double Bottom ATR",group = doubleBottom)
+removeSweptLevels = input.bool(false, title = 'Delete swept double bottoms', tooltip = 'When enabled, past swing lines will be deleted if price closes through them.', group = doubleBottom)
+// } 
 
+//===VISUAL SETTINGS FOR BANDS===
+// {
+shColor = input.color(color.red, 'Swing High Colour', group = '--- Visuals ---', display = display.all - display.status_line)
+slColor = input.color(color.aqua, 'Swing Low Colour', group = '--- Visuals ---', display = display.all - display.status_line)
+bandColor = input.color(color.white, 'ATR Band Colour', group = '--- Visuals ---', display = display.all - display.status_line)
+width = input.int(1, 'Line Thickness', minval = 1, maxval = 5, group = '--- Visuals ---', display = display.all - display.status_line)
+styleStr = input.string('Dotted', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = '--- Visuals ---', display = display.all - display.status_line)
+style = styleStr == 'Dotted' ? line.style_dotted : styleStr == 'Dashed' ? line.style_dashed : line.style_solid
+// }
 
-
-
-// === INPUTS ===
-swingStrengthHigh = input.int(5, minval = 1, title = 'Swing high Lookback', tooltip = "How many candles to look back and determine and local Swing High upon which to trigger a doubble bottom search", display = display.all - display.status_line)
-swingStrengthLow = input.int(5, minval = 1, title = 'Swing low Lookback', tooltip = "How many candles to look back and determine and local Swing Low upon which to trigger a doubble bottom search", display = display.all - display.status_line)
-swingSourceHigh = input.source(high, title = 'Swing high source', display = display.all - display.status_line)
-swingSourceLow = input.source(low, title = 'Swing low source', display = display.all - display.status_line)
-removeSweptLevels = input.bool(false, title = 'Delete swept double bottoms', tooltip = 'When enabled, past swing lines will be deleted if price closes through them.')
-sweepConditionOpt = input.string("Close Break", title = "Sweep condition type", options = ["Wick Break", "Close Break"], tooltip = "Choose whether swing levels are deleted when price wicks through them (high/low) or closes through them (close).")
-// --- Post-break extension ---
-extendAfterBreakBars = input.int(2, "Extend zones N bars after invalidation", minval=0, tooltip="Keeps the swing line and its ATR band visible for N bars after the level is broken.")
-
-
-doubeBottomATRLength = input.int(14, title = "Double Bottom ATR length")
-doubleBottomATRBand = input.float(1, title = "Double Bottom Zone ATR Multiplier", tooltip = "Creates a band around a local Swing High or Swing Low, upon which to detect the presence of a reversal candle and confirm and double bottom entry. Number multiplies the Double Bottom ATR")
-
-// === STYLE INPUTS ===
-// --- Current SH
-shExtColor = input.color(color.red, 'Colour', group = 'Current Swing High', display = display.all - display.status_line)
-shExtStyleStr = input.string('Solid', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Current Swing High', display = display.all - display.status_line)
-shExtWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing High', display = display.all - display.status_line)
-// --- Past SH
-shColor = input.color(color.red, 'Colour', group = 'Past Swing High', display = display.all - display.status_line)
-shBandColor = input.color(color.white, 'Colour', group = 'Past Swing High', display = display.all - display.status_line)
-shStyleStr = input.string('Dotted', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Past Swing High', display = display.all - display.status_line)
-shWidth = input.int(1, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing High', display = display.all - display.status_line)
-// --- Current SL
-slExtColor = input.color(color.aqua, 'Colour', group = 'Current Swing Low', display = display.all - display.status_line)
-slExtStyleStr = input.string('Solid', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Current Swing Low', display = display.all - display.status_line)
-slExtWidth = input.int(2, 'Thickness', minval = 1, maxval = 5, group = 'Current Swing Low', display = display.all - display.status_line)
-// --- Past SL
-slColor = input.color(color.aqua, 'Colour', group = 'Past Swing Low', display = display.all - display.status_line)
-slBandColor = input.color(color.white, 'Colour', group = 'Past Swing Low', display = display.all - display.status_line)
-slStyleStr = input.string('Dotted', 'Style', options = ['Solid', 'Dotted', 'Dashed'], group = 'Past Swing Low', display = display.all - display.status_line)
-slWidth = input.int(1, 'Thickness', minval = 1, maxval = 5, group = 'Past Swing Low', display = display.all - display.status_line)
-
-// === STYLE MAPPINGS ===
-shExtStyle = shExtStyleStr == 'Dotted' ? line.style_dotted : shExtStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
-shStyle = shStyleStr == 'Dotted' ? line.style_dotted : shStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
-slExtStyle = slExtStyleStr == 'Dotted' ? line.style_dotted : slExtStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
-slStyle = slStyleStr == 'Dotted' ? line.style_dotted : slStyleStr == 'Dashed' ? line.style_dashed : line.style_solid
-
-
-
+//ATR BAND VARIABLE
 dbRangeAtr = (ta.atr(doubeBottomATRLength) * doubleBottomATRBand) / 2
 
 
@@ -206,15 +186,15 @@ lowBroken = not na(currentLow) and low < currentLow
 if not na(swingHigh)
     if not na(currentHighLine)
         line.set_extend(currentHighLine, extend.none)
-        line.set_style(currentHighLine, shStyle)
-        array.push(pastHighLines, line.new(currentHighStart, currentHigh, bar_index, currentHigh, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+        line.set_style(currentHighLine, style)
+        array.push(pastHighLines, line.new(currentHighStart, currentHigh, bar_index, currentHigh, color = shColor, width = width, style = style, extend = extend.none))
         array.push(pastHighPrices, currentHigh)
         line.delete(currentHighLine)
 
         // Archive CURRENT HIGH bands to PAST (if they exist)
         if not na(currentHighBandTopLine) and not na(currentHighBandBotLine)
-            array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
-            array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
+            array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
+            array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
             line.delete(currentHighBandTopLine)
             line.delete(currentHighBandBotLine)
             currentHighBandTopLine := na
@@ -223,10 +203,10 @@ if not na(swingHigh)
    
     currentHigh := swingHigh
     currentHighStart := bar_index - swingStrengthHigh
-    currentHighLine := line.new(currentHighStart, swingHigh, bar_index, swingHigh, color = shExtColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
+    currentHighLine := line.new(currentHighStart, swingHigh, bar_index, swingHigh, color = shColor, width = width, style = style, extend = extend.none)
     currentHighBandHalf := dbRangeAtr
-    currentHighBandTopLine := line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shBandColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
-    currentHighBandBotLine := line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shBandColor, width = shExtWidth, style = shExtStyle, extend = extend.none)
+    currentHighBandTopLine := line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
+    currentHighBandBotLine := line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
     currentHighLine
 
 
@@ -237,15 +217,15 @@ if not na(swingHigh)
 if not na(swingLow)
     if not na(currentLowLine)
         line.set_extend(currentLowLine, extend.none)
-        line.set_style(currentLowLine, slStyle)
-        array.push(pastLowLines, line.new(currentLowStart, currentLow, bar_index, currentLow, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+        line.set_style(currentLowLine, style)
+        array.push(pastLowLines, line.new(currentLowStart, currentLow, bar_index, currentLow, color = slColor, width = width, style = style, extend = extend.none))
         array.push(pastLowPrices, currentLow)
         line.delete(currentLowLine)
 
         // Archive CURRENT LOW bands to PAST (if they exist)
         if not na(currentLowBandTopLine) and not na(currentLowBandBotLine)
-            array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
-            array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
+            array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
+            array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
             line.delete(currentLowBandTopLine)
             line.delete(currentLowBandBotLine)
             currentLowBandTopLine := na
@@ -254,10 +234,10 @@ if not na(swingLow)
 
     currentLow := swingLow
     currentLowStart := bar_index - swingStrengthLow
-    currentLowLine := line.new(currentLowStart, swingLow, bar_index, swingLow, color = slExtColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
+    currentLowLine := line.new(currentLowStart, swingLow, bar_index, swingLow, color = slColor, width = width, style = style, extend = extend.none)
     currentLowBandHalf    := dbRangeAtr
-    currentLowBandTopLine := line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slBandColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
-    currentLowBandBotLine := line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slBandColor, width = slExtWidth, style = slExtStyle, extend = extend.none)
+    currentLowBandTopLine := line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
+    currentLowBandBotLine := line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
     currentLowLine
 
 // === EXTEND CURRENT LINES TO CURRENT BAR ===
@@ -333,22 +313,22 @@ if extLowBarsLeft > 0
 if highBroken
     // archive the current high base line to "past"
     line.set_extend(currentHighLine, extend.none)
-    line.set_style(currentHighLine, shStyle)
-    array.push(pastHighLines, line.new(currentHighStart, currentHigh, bar_index, currentHigh, color = shColor, width = shWidth, style = shStyle, extend = extend.none))
+    line.set_style(currentHighLine, style)
+    array.push(pastHighLines, line.new(currentHighStart, currentHigh, bar_index, currentHigh, color = shColor, width = width, style = style, extend = extend.none))
     array.push(pastHighPrices, currentHigh)
 
     // archive the CURRENT HIGH bands to "past" BEFORE clearing vars
     if not na(currentHighBandTopLine) and not na(currentHighBandBotLine)
-        array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
-        array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none))
+        array.push(pastHighBandTopLines, line.new(currentHighStart, currentHigh + currentHighBandHalf, bar_index, currentHigh + currentHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
+        array.push(pastHighBandBotLines, line.new(currentHighStart, currentHigh - currentHighBandHalf, bar_index, currentHigh - currentHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
         
     // spawn post-break extension clones for N bars
     if extendAfterBreakBars > 0
         extHighPrice    := currentHigh
         extHighBandHalf := currentHighBandHalf
-        extHighBaseLine    := line.new(bar_index, extHighPrice, bar_index, extHighPrice, color = shColor, width = shWidth, style = shStyle, extend = extend.none)
-        extHighBandTopLine := line.new(bar_index, extHighPrice + extHighBandHalf, bar_index, extHighPrice + extHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none)
-        extHighBandBotLine := line.new(bar_index, extHighPrice - extHighBandHalf, bar_index, extHighPrice - extHighBandHalf, color = shBandColor, width = shWidth, style = shStyle, extend = extend.none)
+        extHighBaseLine    := line.new(bar_index, extHighPrice, bar_index, extHighPrice, color = shColor, width = width, style = style, extend = extend.none)
+        extHighBandTopLine := line.new(bar_index, extHighPrice + extHighBandHalf, bar_index, extHighPrice + extHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
+        extHighBandBotLine := line.new(bar_index, extHighPrice - extHighBandHalf, bar_index, extHighPrice - extHighBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
         extHighBarsLeft := extendAfterBreakBars
 
     // now clear the current high base line + vars
@@ -365,22 +345,22 @@ if highBroken
 if lowBroken
     // archive the current low base line to "past"
     line.set_extend(currentLowLine, extend.none)
-    line.set_style(currentLowLine, slStyle)
-    array.push(pastLowLines, line.new(currentLowStart, currentLow, bar_index, currentLow, color = slColor, width = slWidth, style = slStyle, extend = extend.none))
+    line.set_style(currentLowLine, style)
+    array.push(pastLowLines, line.new(currentLowStart, currentLow, bar_index, currentLow, color = slColor, width = width, style = style, extend = extend.none))
     array.push(pastLowPrices, currentLow)
 
     // archive CURRENT LOW bands to "past" BEFORE clearing vars
     if not na(currentLowBandTopLine) and not na(currentLowBandBotLine)
-        array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
-        array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none))
+        array.push(pastLowBandTopLines, line.new(currentLowStart, currentLow + currentLowBandHalf, bar_index, currentLow + currentLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
+        array.push(pastLowBandBotLines, line.new(currentLowStart, currentLow - currentLowBandHalf, bar_index, currentLow - currentLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none))
    
     // spawn post-break extension clones for N bars
     if extendAfterBreakBars > 0
         extLowPrice    := currentLow
         extLowBandHalf := currentLowBandHalf
-        extLowBaseLine    := line.new(bar_index, extLowPrice, bar_index, extLowPrice, color = slColor, width = slWidth, style = slStyle, extend = extend.none)
-        extLowBandTopLine := line.new(bar_index, extLowPrice + extLowBandHalf, bar_index, extLowPrice + extLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none)
-        extLowBandBotLine := line.new(bar_index, extLowPrice - extLowBandHalf, bar_index, extLowPrice - extLowBandHalf, color = slBandColor, width = slWidth, style = slStyle, extend = extend.none)
+        extLowBaseLine    := line.new(bar_index, extLowPrice, bar_index, extLowPrice, color = slColor, width = width, style = style, extend = extend.none)
+        extLowBandTopLine := line.new(bar_index, extLowPrice + extLowBandHalf, bar_index, extLowPrice + extLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
+        extLowBandBotLine := line.new(bar_index, extLowPrice - extLowBandHalf, bar_index, extLowPrice - extLowBandHalf, color = bandColor, width = width, style = style, extend = extend.none)
         extLowBarsLeft := extendAfterBreakBars
 
     // now clear the current low base line + vars
@@ -438,13 +418,16 @@ if removeSweptLevels
 
 
 // Inputs (optional fine-tune)
-var const string GRP_REV = "Zone Reversal Triggers"
+var const string GRP_REV = "========== DOUBLE BOTTOM CANDLE SETTINGS =========="
 useCloseForZone = input.bool(false, "Zone test uses CLOSE (else LOW/HIGH)", group=GRP_REV, tooltip="If true, close must be inside the band; else we use low for lows and high for highs.")
-hammerFib   = input.float(0.382, "Hammer fib (pin bar)", minval=0, maxval=1, group=GRP_REV)
-starFib     = input.float(0.382, "Shooting star fib (pin)", minval=0, maxval=1, group=GRP_REV)
-engulfWick  = input.bool(false,   "Engulf must include wick?", group=GRP_REV)
-allowancePt = input.float(0.0,    "Engulf open allowance (pts)", group=GRP_REV, tooltip="Tolerance for tiny open gaps")
-rejWickMax  = input.float(0.0,    "Max rejection wick/body (0=off)", group=GRP_REV)
+var const string pin_Params1 = "--- PIN BAR SETTINGS ---"
+hammerFib1   = input.float(0.382, title = "Hammer fib (pin bar)", tooltip =  "Defines where the candle body must sit within its range.\nFor a hammer: fib is measured from the low upward.\n• 0.25 = body in bottom quarter of candle (strict)\n• 0.50 = body in lower half (looser)\nDefault 0.382 ≈ lower 38% of range.", minval=0, maxval=1, group=pin_Params1)
+starFib1     = input.float(0.382, title = "Shooting star fib (pin)", tooltip = "Defines where the candle body must sit within its range.\nFor a shooting star: fib is measured from the high downward.\n• 0.25 = body in top quarter of candle (strict)\n• 0.50 = body in upper half (looser)\nDefault 0.382 ≈ upper 38% of range.", minval=0, maxval=1, group=pin_Params1)
+colorMatch1  = input.bool(false, title = "Pin bar bullish or bearish?", tooltip= "Pin bars must close bullish for a Hammer and bearish for a Star", group=pin_Params1)
+var const string EC_Params1 = "--- ENGULFING CANDLE SETTINGS ---"
+allowancePt1 = input.float(0.2, title = "Engulf open allowance (pts)", tooltip="Tolerance for small gaps at open, it's good practice to leave a few points tolerance as gaps are prevailant", group=EC_Params1)
+rejWickMax1  = input.float(0.0, title =  "Max allowable Wick/Body (0 = off)", tooltip = "Optional cleanliness filter for engulfing candles.\n0 = disabled.\nIf > 0: the wick on the rejection side must be smaller than this multiple of the candle body.\ne.g. 0.5 = wick must be < 50% of body.\nBullish: checks the TOP wick. Bearish: checks the BOTTOM wick." ,group=EC_Params1)
+engulfWick1  = input.bool(false, title = "Engulf previous wick", tooltip= "If an engulfing candle occurs, to be valid it must engulf the previous wick and not just the body", group=EC_Params1)
 
 // Guard: we only have valid zones when current swing + half-width exist
 haveLowZoneCur   = not na(currentLow)  and not na(currentLowBandHalf)
@@ -468,10 +451,10 @@ inLowZone  = inLowZoneCur  or inLowZoneEx
 inHighZone = inHighZoneCur or inHighZoneEx
 
 // Candlestick patterns (evaluated on this bar)
-bullPin = zen.isHammer(hammerFib, false)
-bearPin = zen.isStar(starFib, false)
-bullEng = zen.isBullishEC(allowancePt, rejWickMax, engulfWick)
-bearEng = zen.isBearishEC(allowancePt, rejWickMax, engulfWick)
+bullPin = zen.isHammer(hammerFib1, colorMatch1)
+bearPin = zen.isStar(starFib1, colorMatch1)
+bullEng = zen.isBullishEC(allowancePt1, rejWickMax1, engulfWick1)
+bearEng = zen.isBearishEC(allowancePt1, rejWickMax1, engulfWick1)
 
 // Triggers: zone + correct reversal direction
 longZoneTrigger  = barstate.isconfirmed and inLowZone  and (bullPin or bullEng) and isinSession  // double-bottom style
